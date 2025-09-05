@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""
+Voice-Enabled Financial Research Agent
+This version allows you to interact with the financial agent using voice commands
+"""
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+# Add src directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from agents.voice import StreamedAudioInput, VoicePipeline
+from financial_research_agent.voice_chat import MyWorkflow
+
+async def voice_financial_research():
+    """Run the financial research agent with voice interaction"""
+    
+    print("🎤 Voice-Enabled Financial Research Agent")
+    print("=" * 50)
+    print("Commands:")
+    print("- Say 'analyze [company name]' to research a company")
+    print("- Say 'report' to get the latest financial report")
+    print("- Say 'quit' to exit")
+    print("=" * 50)
+    
+    # Create voice pipeline
+    workflow = MyWorkflow(
+        secret_word="quit",  # Say "quit" to exit
+        on_start=lambda transcription: print(f"🎯 You said: {transcription}")
+    )
+    
+    pipeline = VoicePipeline(workflow=workflow)
+    audio_input = StreamedAudioInput()
+    
+    try:
+        print("\n🎤 Starting voice pipeline...")
+        print("💡 Speak clearly into your microphone")
+        
+        # Run the voice pipeline
+        result = await pipeline.run(audio_input)
+        
+        async for event in result.stream():
+            if event.type == "voice_stream_event_audio":
+                # Handle audio output (TTS)
+                print(f"🔊 Audio response received: {len(event.data) if event.data else 0} bytes")
+            elif event.type == "voice_stream_event_lifecycle":
+                print(f"📡 Lifecycle: {event.event}")
+                
+    except KeyboardInterrupt:
+        print("\n👋 Voice session ended by user")
+    except Exception as e:
+        print(f"❌ Error in voice pipeline: {e}")
+        print("💡 Make sure your microphone is working and OpenAI API is configured")
+    finally:
+        print("🔇 Voice session closed")
+
+def run_text_version():
+    """Run the text-based version if voice fails"""
+    print("\n📝 Falling back to text-based version...")
+    try:
+        from financial_research_agent.main import main
+        asyncio.run(main())
+    except Exception as e:
+        print(f"❌ Text version also failed: {e}")
+
+async def main():
+    """Main entry point with fallback options"""
+    
+    # Check if voice dependencies are available
+    try:
+        import sounddevice
+        print("✅ Audio dependencies available")
+    except ImportError:
+        print("❌ Audio dependencies not available")
+        print("💡 Install with: pip install sounddevice")
+        run_text_version()
+        return
+    
+    # Check if OpenAI API is working
+    try:
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            print("❌ OPENAI_API_KEY not set")
+            print("💡 Set your API key: $env:OPENAI_API_KEY='your-key-here'")
+            return
+        
+        print("✅ OpenAI API key configured")
+        
+        # Try voice first, fallback to text
+        try:
+            await voice_financial_research()
+        except Exception as e:
+            print(f"❌ Voice failed: {e}")
+            print("💡 Falling back to text version...")
+            run_text_version()
+            
+    except Exception as e:
+        print(f"❌ Setup failed: {e}")
+        print("💡 Check your configuration and try again")
+
+if __name__ == "__main__":
+    asyncio.run(main())
