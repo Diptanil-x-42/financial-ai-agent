@@ -1,7 +1,15 @@
+import sys
+from pathlib import Path
+
 import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import yfinance as yf
+
+if __package__ in {None, ""}:
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from financial_research_agent.agents.ticker_utils import resolve_ticker
 
