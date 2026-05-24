@@ -29,11 +29,11 @@ class DemoPrinter:
     def _print_status(self):
         self.console.clear()
         for item_id, (content, is_done) in self.items.items():
-            status = "✅" if is_done else "⏳"
+            status = "[OK]" if is_done else "[WAIT]"
             self.console.print(f"{status} {content}")
             
     def end(self):
-        self.console.print("\n🎉 Demo completed!")
+        self.console.print("\nDone: Demo completed!")
 
 async def demo_financial_research(query: str):
     """Demo the financial research workflow"""
@@ -84,14 +84,14 @@ async def demo_financial_research(query: str):
         f"with revenue growth of 8% year-over-year. The company's iPhone segment continues "
         f"to be the primary driver of revenue, while services revenue showed impressive growth.\n\n"
         f"[bold]Key Findings:[/bold]\n"
-        f"• Revenue: $89.5 billion (8% YoY growth)\n"
-        f"• iPhone sales: $43.8 billion\n"
-        f"• Services revenue: $22.3 billion (16% YoY growth)\n"
-        f"• Net income: $22.9 billion\n\n"
+        f"- Revenue: $89.5 billion (8% YoY growth)\n"
+        f"- iPhone sales: $43.8 billion\n"
+        f"- Services revenue: $22.3 billion (16% YoY growth)\n"
+        f"- Net income: $22.9 billion\n\n"
         f"[bold]Follow-up Questions:[/bold]\n"
-        f"• How does Apple's performance compare to competitors?\n"
-        f"• What are the growth prospects for Apple's services business?\n"
-        f"• How might supply chain issues affect future performance?",
+        f"- How does Apple's performance compare to competitors?\n"
+        f"- What are the growth prospects for Apple's services business?\n"
+        f"- How might supply chain issues affect future performance?",
         title="Financial Analysis Report",
         border_style="green"
     ))

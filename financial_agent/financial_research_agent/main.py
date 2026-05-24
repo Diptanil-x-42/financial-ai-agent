@@ -1,10 +1,8 @@
 # main.py
 import asyncio
+
 from financial_research_agent.manager import FinancialResearchManager
 
-import os
-import time
-from typing import Any
 
 # Entrypoint for the financial bot example.
 # Run this as `python -m financial_research_agent.main` and enter a
@@ -15,28 +13,27 @@ async def main() -> None:
 
     mgr = FinancialResearchManager()
 
-    # Run the financial research without the Flask server
+    # The manager starts the local data server automatically when needed.
     print("Starting financial research...")
-    
+
     try:
         await mgr.run(query, None)
     except Exception as e:
         error_msg = str(e)
         if "quota" in error_msg.lower() or "429" in error_msg:
             print("\n" + "="*60)
-            print("❌ OPENAI API QUOTA EXCEEDED")
+            print("[ERROR] OPENAI API QUOTA EXCEEDED")
             print("="*60)
             print("Your OpenAI API account has exceeded its usage limit.")
-            print("\n🔧 SOLUTIONS:")
+            print("\nSolutions:")
             print("1. Add payment method: https://platform.openai.com/account/billing")
             print("2. Use demo version: python demo_financial_agent.py")
             print("3. Wait for quota reset (if on free tier)")
-            print("\n💡 The project is working correctly - this is a billing issue.")
+            print("\nTip: The project is working correctly - this is a billing issue.")
             print("="*60)
         else:
-            print(f"\n❌ Unexpected error: {e}")
+            print(f"\n[ERROR] Unexpected error: {e}")
             print("Please check your configuration and try again.")
 
 if __name__ == "__main__":
     asyncio.run(main())
-

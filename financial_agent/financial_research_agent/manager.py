@@ -1,67 +1,51 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
 import time
 from collections.abc import Sequence
+from pathlib import Path
 
+import requests
 from rich.console import Console
 
-# Import from the src directory directly
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 from agents import Runner, RunResult, custom_span, gen_trace_id, trace
 
 from financial_research_agent.agents.financials_agent import financials_agent
 from financial_research_agent.agents.planner_agent import FinancialSearchItem, FinancialSearchPlan, planner_agent
 from financial_research_agent.agents.risk_agent import risk_agent
 from financial_research_agent.agents.search_agent import search_agent
-from financial_research_agent.printer import Printer
-from typing import TYPE_CHECKING
-
+from financial_research_agent.agents.ticker_utils import resolve_ticker
 from financial_research_agent.agents.verifier_agent import VerificationResult, verifier_agent
 from financial_research_agent.agents.writer_agent import FinancialReportData, writer_agent
 from financial_research_agent.printer import Printer
 
-import numpy as np
-import sounddevice as sd
-from textual import events
-from textual.app import App, ComposeResult
-from textual.containers import Container
-from textual.reactive import reactive
-from textual.widgets import Button, RichLog, Static
-from typing_extensions import override
+# Directory where reports are saved (next to this file)
+_REPORT_DIR = Path(__file__).resolve().parent.parent
+_REPORT_PATH = _REPORT_DIR / "financial_report.txt"
 
-from agents.voice import StreamedAudioInput, VoicePipeline
+# Address of the Flask data server (search_agent_server.py)
+_DATA_SERVER_URL = "http://localhost:8000"
+_SERVER_FILE = Path(__file__).resolve().parent / "agents" / "search_agent_server.py"
 
-# Import MyWorkflow class - handle both module and package use cases
-if TYPE_CHECKING:
-    # For type checking, use the relative import
-    from financial_research_agent.voice_chat import MyWorkflow
-else:
-    # At runtime, try both import styles
-    try:
-        # Try absolute import first (when used as a package)
-        from financial_research_agent.voice_chat import MyWorkflow
-    except ImportError:
-        # Fall back to direct import (when run as a script)
-        from voice_chat import MyWorkflow
 
 async def _summary_extractor(run_result: RunResult) -> str:
-    """Custom output extractor for sub‑agents that return an AnalysisSummary."""
+    """Custom output extractor for sub-agents that return an AnalysisSummary."""
     return str(run_result.final_output.summary)
 
 
 class FinancialResearchManager:
     """
-    Orchestrates the full flow: planning, searching, sub‑analysis, writing, and verification.
+    Orchestrates the full flow: planning, searching, sub-analysis, writing, and verification.
     """
 
     def __init__(self) -> None:
         self.console = Console()
         self.printer = Printer(self.console)
+        self._server_process: subprocess.Popen[str] | None = None
 
-    async def run(self, query: str, mcp_server=None) -> None:  # ✅ Accept mcp_server
+    async def run(self, query: str, mcp_server=None) -> None:
         trace_id = gen_trace_id()
         with trace("Financial research trace", trace_id=trace_id):
             self.printer.update_item(
@@ -71,9 +55,9 @@ class FinancialResearchManager:
                 hide_checkmark=True,
             )
             self.printer.update_item("start", "Starting financial research...", is_done=True)
-            
+
             search_plan = await self._plan_searches(query)
-            search_results = await self._perform_searches(search_plan, mcp_server)  # ✅ Pass mcp_server
+            search_results = await self._perform_searches(search_plan, mcp_server)
             report = await self._write_report(query, search_results)
             verification = await self._verify_report(report)
 
@@ -103,25 +87,23 @@ class FinancialResearchManager:
         except Exception as e:
             error_msg = str(e)
             if "quota" in error_msg.lower() or "429" in error_msg:
-                # Provide helpful error message for quota issues
-                print(f"\n❌ API Error: {error_msg}")
-                print("💡 This is a billing issue - your OpenAI API quota has been exceeded.")
-                print("🔧 To fix: Add payment method at https://platform.openai.com/account/billing")
-                raise  # Re-raise to be caught by main error handler
+                print(f"\n[ERROR] API Error: {error_msg}")
+                print("Tip: This is a billing issue - your OpenAI API quota has been exceeded.")
+                print("Fix: Add a payment method at https://platform.openai.com/account/billing")
+                raise
             else:
-                # Re-raise other errors
                 raise
 
     async def _perform_searches(self, search_plan: FinancialSearchPlan, mcp_server=None) -> Sequence[str]:
         with custom_span("Search the web"):
             self.printer.update_item("searching", "Searching...")
+            self._ensure_data_server()
 
-            # ✅ Pass `mcp_server` to `_search`
             tasks = [asyncio.create_task(self._search(item, mcp_server)) for item in search_plan.searches]
-            
+
             results: list[str] = []
             num_completed = 0
-            
+
             for task in asyncio.as_completed(tasks):
                 result = await task
                 if result is not None:
@@ -135,25 +117,64 @@ class FinancialResearchManager:
             return results
 
     async def _search(self, item: FinancialSearchItem, mcp_server=None) -> str | None:
-        input_data = f"Search term: {item.query}\nReason: {item.reason}"
+        """Search for financial data using the Flask data server, with graceful fallback."""
+        ticker = resolve_ticker(item.query)
         try:
-            # Use a simple approach that doesn't require external servers
-            # For now, we'll create a mock search result based on the query
-            mock_result = f"Search results for '{item.query}': Based on {item.reason}, this search would typically return recent financial news, earnings reports, and analyst commentary about the company or topic."
-            return mock_result
+            # Try Yahoo Finance via the Flask data server
+            response = requests.post(
+                f"{_DATA_SERVER_URL}/get_yahoo_data",
+                json={"stock_data": item.query, "ticker": ticker},
+                timeout=10,
+            )
+            if response.ok:
+                data = response.json()
+                if data.get("success"):
+                    return (
+                        f"Source: {data.get('source', 'Yahoo Finance')}\n"
+                        f"Query: {item.query}\n"
+                        f"Ticker: {data.get('ticker', ticker)}\n"
+                        f"Data: {data['data']}"
+                    )
+
+            # Try Reddit via the Flask data server
+            response = requests.post(
+                f"{_DATA_SERVER_URL}/get_reddit_data",
+                json={"stock_data": item.query},
+                timeout=10,
+            )
+            if response.ok:
+                data = response.json()
+                if data.get("success"):
+                    return (
+                        f"Source: {data.get('source', 'Reddit')}\n"
+                        f"Query: {item.query}\n"
+                        f"URL: {data.get('source_url', 'N/A')}\n"
+                        f"Data: {data['data']}"
+                    )
+
+            return f"Search results for '{item.query}': No data returned from server."
+
+        except requests.ConnectionError:
+            # Server not running - use the LLM agent as fallback
+            try:
+                input_data = f"Search term: {item.query}\nReason: {item.reason}"
+                result = await Runner.run(search_agent, input_data)
+                return f"Source: LLM search fallback\nQuery: {item.query}\nData: {result.final_output}"
+            except Exception:
+                return f"Search results for '{item.query}': Server unavailable and agent fallback failed."
         except Exception as e:
-            print(f"Search error: {e}")
+            print(f"Search error for '{item.query}': {e}")
             return None
 
     async def _write_report(self, query: str, search_results: Sequence[str]) -> FinancialReportData:
         fundamentals_tool = financials_agent.as_tool(
             tool_name="fundamentals_analysis",
-            tool_description="Use to get a short write‑up of key financial metrics",
+            tool_description="Use to get a short write-up of key financial metrics",
             custom_output_extractor=_summary_extractor,
         )
         risk_tool = risk_agent.as_tool(
             tool_name="risk_analysis",
-            tool_description="Use to get a short write‑up of potential red flags",
+            tool_description="Use to get a short write-up of potential red flags",
             custom_output_extractor=_summary_extractor,
         )
         writer_with_tools = writer_agent.clone(tools=[fundamentals_tool, risk_tool])
@@ -174,8 +195,9 @@ class FinancialResearchManager:
                 last_update = time.time()
         self.printer.mark_item_done("writing")
         final_report = result.final_output_as(FinancialReportData)
-                # Save to a file
-        with open("financial_report.txt", "w", encoding="utf-8") as file:
+
+        # Save to a file
+        with open(_REPORT_PATH, "w", encoding="utf-8") as file:
             file.write(final_report.markdown_report)
 
         return final_report
@@ -186,205 +208,25 @@ class FinancialResearchManager:
         self.printer.mark_item_done("verifying")
         return result.final_output_as(VerificationResult)
 
-
-CHUNK_LENGTH_S = 0.05  # 100ms
-SAMPLE_RATE = 24000
-FORMAT = np.int16
-CHANNELS = 1
-
-
-class Header(Static):
-    """A header widget."""
-
-    session_id = reactive("")
-
-    @override
-    def render(self) -> str:
-        return "Speak to the agent. When you stop speaking, it will respond."
-
-
-class AudioStatusIndicator(Static):
-    """A widget that shows the current audio recording status."""
-
-    is_recording = reactive(False)
-
-    @override
-    def render(self) -> str:
-        status = (
-            "🔴 Recording... (Press K to stop)"
-            if self.is_recording
-            else "⚪ Press K to start recording (Q to quit)"
-        )
-        return status
-
-
-class RealtimeApp(App[None]):
-    CSS = """
-        Screen {
-            background: #1a1b26;  /* Dark blue-grey background */
-        }
-
-        Container {
-            border: double rgb(91, 164, 91);
-        }
-
-        Horizontal {
-            width: 100%;
-        }
-
-        #input-container {
-            height: 5;  /* Explicit height for input container */
-            margin: 1 1;
-            padding: 1 2;
-        }
-
-        Input {
-            width: 80%;
-            height: 3;  /* Explicit height for input */
-        }
-
-        Button {
-            width: 20%;
-            height: 3;  /* Explicit height for button */
-        }
-
-        #bottom-pane {
-            width: 100%;
-            height: 82%;  /* Reduced to make room for session display */
-            border: round rgb(205, 133, 63);
-            content-align: center middle;
-        }
-
-        #status-indicator {
-            height: 3;
-            content-align: center middle;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-            margin: 1 1;
-        }
-
-        #session-display {
-            height: 3;
-            content-align: center middle;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-            margin: 1 1;
-        }
-
-        Static {
-            color: white;
-        }
-    """
-
-    should_send_audio: asyncio.Event
-    audio_player: sd.OutputStream
-    last_audio_item_id: str | None
-    connected: asyncio.Event
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.last_audio_item_id = None
-        self.should_send_audio = asyncio.Event()
-        self.connected = asyncio.Event()
-        self.pipeline = VoicePipeline(
-            workflow=MyWorkflow(secret_word="dog", on_start=self._on_transcription)
-        )
-        self._audio_input = StreamedAudioInput()
-        self.audio_player = sd.OutputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype=FORMAT,
-        )
-
-    def _on_transcription(self, transcription: str) -> None:
+    def _ensure_data_server(self) -> None:
+        """Start the local data server when it is not already running."""
         try:
-            self.query_one("#bottom-pane", RichLog).write(f"Transcription: {transcription}")
-        except Exception:
+            response = requests.get(f"{_DATA_SERVER_URL}/health", timeout=2)
+            if response.ok:
+                return
+        except requests.RequestException:
             pass
 
-    @override
-    def compose(self) -> ComposeResult:
-        """Create child widgets for the app."""
-        with Container():
-            yield Header(id="session-display")
-            yield AudioStatusIndicator(id="status-indicator")
-            yield RichLog(id="bottom-pane", wrap=True, highlight=True, markup=True)
-
-    async def on_mount(self) -> None:
-        print("RealtimeApp mounted!")
-        self.run_worker(self.start_voice_pipeline())
-        self.run_worker(self.send_mic_audio())
-
-    async def start_voice_pipeline(self) -> None:
-        try:
-            self.audio_player.start()
-            self.result = await self.pipeline.run(self._audio_input)
-
-            async for event in self.result.stream():
-                bottom_pane = self.query_one("#bottom-pane", RichLog)
-                if event.type == "voice_stream_event_audio":
-                    self.audio_player.write(event.data)
-                    bottom_pane.write(
-                        f"Received audio: {len(event.data) if event.data is not None else '0'} bytes"
-                    )
-                elif event.type == "voice_stream_event_lifecycle":
-                    bottom_pane.write(f"Lifecycle event: {event.event}")
-        except Exception as e:
-            bottom_pane = self.query_one("#bottom-pane", RichLog)
-            bottom_pane.write(f"Error: {e}")
-        finally:
-            self.audio_player.close()
-
-    async def send_mic_audio(self) -> None:
-        device_info = sd.query_devices()
-        print(device_info)
-
-        read_size = int(SAMPLE_RATE * 0.02)
-
-        stream = sd.InputStream(
-            channels=CHANNELS,
-            samplerate=SAMPLE_RATE,
-            dtype="int16",
-        )
-        stream.start()
-
-        status_indicator = self.query_one(AudioStatusIndicator)
-
-        try:
-            while True:
-                if stream.read_available < read_size:
-                    await asyncio.sleep(0)
-                    continue
-
-                await self.should_send_audio.wait()
-                status_indicator.is_recording = True
-
-                data, _ = stream.read(read_size)
-
-                await self._audio_input.add_audio(data)
-                await asyncio.sleep(0)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            stream.stop()
-            stream.close()
-
-    async def on_key(self, event: events.Key) -> None:
-        """Handle key press events."""
-        if event.key == "enter":
-            self.query_one(Button).press()
+        if self._server_process and self._server_process.poll() is None:
             return
 
-        if event.key == "q":
-            self.exit()
-            return
-
-        if event.key == "k":
-            status_indicator = self.query_one(AudioStatusIndicator)
-            if status_indicator.is_recording:
-                self.should_send_audio.clear()
-                status_indicator.is_recording = False
-            else:
-                self.should_send_audio.set()
-                status_indicator.is_recording = True
-
+        try:
+            self._server_process = subprocess.Popen(
+                [sys.executable, str(_SERVER_FILE)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            time.sleep(2)
+        except Exception as exc:
+            print(f"Could not start local financial data server: {exc}")

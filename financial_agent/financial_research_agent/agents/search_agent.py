@@ -1,5 +1,6 @@
 # search_agent.py
 import asyncio
+from pathlib import Path
 import os
 import shutil
 import subprocess
@@ -7,9 +8,6 @@ import time
 import requests
 from typing import Any
 
-# Import from the src directory directly
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from agents import Agent, Runner, gen_trace_id, trace
 from agents.model_settings import ModelSettings
 
@@ -26,7 +24,8 @@ async def run(mcp_server, input_data):
     print(f"Running: {message}")
     result = await Runner.run(starting_agent=search_agent, input=message)
     # Save result to a text file
-    with open("financial_report.txt", "w", encoding="utf-8") as f:
+    report_path = Path(__file__).resolve().parent.parent.parent / "financial_report.txt"
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(str(result))  # Ensure result is stringified
     return result
 

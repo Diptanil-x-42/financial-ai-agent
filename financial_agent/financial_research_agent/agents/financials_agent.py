@@ -1,12 +1,8 @@
 from pydantic import BaseModel
 
-# Import from the src directory directly
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from agents import Agent
 
-# A sub‑agent focused on analyzing a company's fundamentals.
+# A sub-agent focused on analyzing a company's fundamentals.
 FINANCIALS_PROMPT = (
     "You are a financial analyst focused on company fundamentals such as revenue, "
     "profit, margins and growth trajectory. Given a collection of web (and optional file) "

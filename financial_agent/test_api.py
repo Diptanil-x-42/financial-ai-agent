@@ -8,10 +8,10 @@ def test_openai_api():
         # Check if API key is set
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
-            print("❌ OPENAI_API_KEY environment variable is not set")
+            print("[ERROR] OPENAI_API_KEY environment variable is not set")
             return False
         
-        print(f"✅ API Key found: {api_key[:10]}...")
+        print(f"[OK] API Key found: {api_key[:4]}...{api_key[-4:]}")
         
         # Test the API
         client = openai.OpenAI()
@@ -21,11 +21,11 @@ def test_openai_api():
             max_tokens=10
         )
         
-        print(f"✅ API working! Response: {response.choices[0].message.content}")
+        print(f"[OK] API working! Response: {response.choices[0].message.content}")
         return True
         
     except Exception as e:
-        print(f"❌ API Error: {e}")
+        print(f"[ERROR] API Error: {e}")
         return False
 
 if __name__ == "__main__":

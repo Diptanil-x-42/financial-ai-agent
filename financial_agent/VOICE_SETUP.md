@@ -1,8 +1,8 @@
-# 🎤 Voice-Enabled Financial Research Agent
+# Voice: Voice-Enabled Financial Research Agent
 
 This guide explains how to enable and use voice functionality in your Financial Research Agent.
 
-## 🚀 Quick Start
+## Starting: Quick Start
 
 ### 1. Basic Voice Demo
 ```bash
@@ -14,13 +14,13 @@ python financial_research_agent/voice_demo.py
 python financial_research_agent/voice_main.py
 ```
 
-## 📋 Prerequisites
+##  Prerequisites
 
 ### Required Dependencies
-- ✅ **sounddevice** - Audio input/output
-- ✅ **OpenAI API Key** - For AI processing
-- ✅ **Microphone** - For voice input
-- ✅ **Speakers/Headphones** - For voice output
+- [OK] **sounddevice** - Audio input/output
+- [OK] **OpenAI API Key** - For AI processing
+- [OK] **Microphone** - For voice input
+- [OK] **Speakers/Headphones** - For voice output
 
 ### Installation
 ```bash
@@ -34,7 +34,7 @@ pip install 'openai-agents[voice]'
 $env:OPENAI_API_KEY="your-api-key-here"
 ```
 
-## 🎯 Voice Commands
+## Heard: Voice Commands
 
 ### Basic Commands
 - **"hello"** - Get a greeting
@@ -47,7 +47,7 @@ $env:OPENAI_API_KEY="your-api-key-here"
 - **"report"** - Get latest financial report
 - **"help"** - Show command list
 
-## 🔧 How It Works
+## Fix: How It Works
 
 ### 1. Voice Input (Speech-to-Text)
 - Uses OpenAI's Whisper model for transcription
@@ -64,17 +64,17 @@ $env:OPENAI_API_KEY="your-api-key-here"
 - Uses OpenAI's TTS model
 - Plays audio through your speakers
 
-## 📁 File Structure
+##  File Structure
 
 ```
 financial_research_agent/
-├── voice_demo.py          # Simple voice demo
-├── voice_main.py          # Full voice-enabled agent
-├── voice_chat.py          # Voice workflow definitions
-└── main.py               # Text-based version (fallback)
+ voice_demo.py          # Simple voice demo
+ voice_main.py          # Full voice-enabled agent
+ voice_chat.py          # Voice workflow definitions
+ main.py               # Text-based version (fallback)
 ```
 
-## 🎮 Usage Examples
+##  Usage Examples
 
 ### Example 1: Company Analysis
 ```
@@ -99,7 +99,7 @@ You: "Quit"
 Agent: "Goodbye! Thank you for using the Financial Research Agent."
 ```
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -138,7 +138,7 @@ python -m financial_research_agent.main
 python demo_financial_agent.py
 ```
 
-## 🔍 Advanced Configuration
+## Checking: Advanced Configuration
 
 ### Custom Voice Workflow
 Edit `voice_main.py` to customize:
@@ -152,7 +152,7 @@ Modify audio parameters in the voice components:
 - Audio format
 - Buffer sizes
 
-## 📚 Technical Details
+##  Technical Details
 
 ### Voice Pipeline Components
 1. **StreamedAudioInput** - Captures microphone audio
@@ -167,23 +167,23 @@ Modify audio parameters in the voice components:
 - **Channels**: Mono
 - **Buffer Size**: 20ms chunks
 
-## 🎉 Success Indicators
+## Done: Success Indicators
 
 When voice is working correctly, you should see:
 ```
-🎤 Voice-Enabled Financial Research Agent
+Voice: Voice-Enabled Financial Research Agent
 ========================================
-🔍 Checking dependencies...
-✅ sounddevice - Available
-✅ Voice components - Available
-✅ OpenAI API Key - Configured
+Checking: Checking dependencies...
+[OK] sounddevice - Available
+[OK] Voice components - Available
+[OK] OpenAI API Key - Configured
 
-🚀 All dependencies available! Starting voice system...
-🎤 Starting voice pipeline...
-💡 Speak clearly into your microphone
+Starting: All dependencies available! Starting voice system...
+Voice: Starting voice pipeline...
+Tip: Speak clearly into your microphone
 ```
 
-## 🆘 Getting Help
+##  Getting Help
 
 If you encounter issues:
 1. Check the troubleshooting section above
@@ -191,7 +191,7 @@ If you encounter issues:
 3. Ensure your OpenAI API key is valid
 4. Test with the simple voice demo first
 
-## 🔮 Future Enhancements
+##  Future Enhancements
 
 Planned voice features:
 - Multi-language support

@@ -57,6 +57,10 @@ logs/
 *.tmp
 *.temp
 
+# Generated reports
+financial_report.txt
+financial_agent/financial_report.txt
+
 # API keys and secrets
 *.key
 *.pem
